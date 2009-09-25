@@ -1,0 +1,24 @@
+<html>
+<head>
+<META HTTP-EQUIV="pragma" CONTENT="no-cache">
+<META HTTP-EQUIV="Cache-Control" CONTENT="no-cache, must-revalidate">
+<META HTTP-EQUIV="expires" CONTENT="0">
+<script language='javascript' src='term.js'></script>
+<script language='javascript' src='tcws.js'></script>
+<script language='javascript'>
+var tcws = new TCWS('sh', 'tomas', 'password');
+var term = new TERM();
+
+function init()
+{
+    term.display();
+    term.register(tcws, 'push');
+    tcws.register(term, 'push');
+    tcws.comet();
+}
+</script>
+</head>
+<body onload="init();" style="margin: 0;">
+<br>
+</body>
+</html>

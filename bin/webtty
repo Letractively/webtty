@@ -1,0 +1,114 @@
+#!/bin/bash
+###############################################################################
+## Author:  Tomas Wang <tomas.89.wang@gmail.com>
+## Date:    2009-09-15
+## Version: 0.1
+##
+##=============================================================================
+## WebTTY start script
+##=============================================================================
+set -e
+trap "" 1
+
+NAME="WebTTY"
+PROG=lib/comet_httpd.py
+PID_PATH=var/run 
+LOG_PATH=var/log
+
+S_POS=72
+
+cd `dirname $0`/..
+ROOT=`pwd`
+PID_PATH="${ROOT}/${PID_PATH}"
+LOG_PATH="${ROOT}/${LOG_PATH}"
+PID_FILE=${PID_PATH}/webtty.pid 
+LOG_FILE=${LOG_PATH}/webtty.log
+LOG_ERRF=${LOG_PATH}/webtty.err
+cd www
+
+state()
+{
+    [ -f ${PID_FILE} ] || return 1
+    PID=`cat ${PID_FILE}`
+    return `kill -0 $PID >/dev/null 2>&1`
+}
+ok()
+{
+    echo -e "\033[${S_POS}G[ \033[1;32mOK\033[0m ]"
+}
+err()
+{
+    echo -e "\033[${S_POS}G[\033[1;31mFAIL\033[0m]"
+}
+warn()
+{
+    echo -e "\033[${S_POS}G[\033[1;33mWARN\033[0m]"
+}
+action()
+{
+    echo -n "$1"
+}
+
+start()
+{
+    state && {
+        action "Status ${NAME} is already run... "
+        warn
+    } || {
+        [ -d ${LOG_PATH} ] || mkdir -p ${LOG_PATH}
+        [ -d ${PID_PATH} ] || mkdir -p ${PID_PATH}
+        action "Start  ${NAME}... "
+        {
+            exec python "${ROOT}/${PROG}"
+        } >>${LOG_FILE} 2>>${LOG_ERRF} &
+        echo "$!" >${PID_FILE}
+        sleep 0.2
+        state && ok || err
+    }
+}
+stop()
+{
+    state && {
+        action "Stop   ${NAME}..."
+        PID=`cat ${PID_FILE}`
+        kill -9 $PID
+        sleep 0.2
+        state && err || ok
+    } || {
+        action "Status ${NAME} is not found... "
+        warn
+    }
+}
+status()
+{
+    action "Status ${NAME} run status... "
+    state && ok || err
+}
+
+#status && echo "OK" || echo "ERR"
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    status)
+        status
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+
+exit 0
+
+##=============================================================================
+## THE END
+##=============================================================================

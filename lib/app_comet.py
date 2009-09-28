@@ -175,7 +175,6 @@ class app_base:
                     os.close(i)
                 except OSError:
                     pass
-        signal.signal(signal.SIGHUP, signal.SIG_IGN)
         if self.cwd is not None:
             os.chdir(self.cwd)
         if self.env is None:

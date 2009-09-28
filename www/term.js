@@ -122,7 +122,7 @@ TERM.fn = TERM.prototype = {
     _c_row:  0,         // cursor current row
     _c_col:  0,         // cursor current col
     _c_shw:  true,      // cursor show (false is hide)
-    _c_svp:  [-1, -1],  // cursor save
+    _c_svp:  [],        // cursor save
     cur_hide: function (b)
     {
         if (b)
@@ -160,34 +160,77 @@ TERM.fn = TERM.prototype = {
             this._c_row += this._c_col / this._col;
             this._c_col = t;
             while (this._c_row >= this._row) {
-                this.cur_line();
+                this.cur_scroll();
                 this._c_row --;
             }
         }
+    },
+    cur_scroll: function (x, t, b)
+    {
+        b = (b === undefined ? this._row : b);
+        t = (t === undefined ? 0 : t);
+        x = (x === undefined ? 1 : x);
+        if (b <= t || x == 0)
+            return;
+        var n, o, a, i;
+        if (x > 0)
+            for (i = 0; i < x; ++i) {
+                n = this.cur_line();
+                o = this._df.childNodes[t];
+                a = this._a.pop();
+                this._a.splice(b, 0, a);
+                this._a.splice(t, 1);
+                this._df.insertBefore(n, this._df.childNodes[b] || null);
+                this._df.removeChild(o);
+                n.style.display = 'block';
+            }
+        else
+            for (i = 0; i < -x; ++i) {
+                n = this.cur_line();
+                o = this._df.childNodes[b - 1];
+                a = this._a.pop();
+                this._a.splice(t, 0, a);
+                this._a.splice(b, 1);
+                this._df.insertBefore(n, this._df.childNodes[t]);
+                this._df.removeChild(o);
+                n.style.display = 'block';
+            }
     },
     cur_line: function ()
     {
         var o = document.createElement('DIV');
         var a = [];
-        o.id = this._n + '_' + this._c_nln;
+        a.lf = 0;           // tail is not \n
+        a.root = o;
+        var n = this._c_nln++;
+        o.id = this._n + '_' + n;
         o.appendChild(document.createTextNode('|'));
         for (var i = 0; i < this._col; ++i) {
-            var s = document.createElement('span');
-            s.id = this._n + '_' + this._c_nln + '_' + i;
-            s.appendChild(document.createTextNode(' '));
+            var s = this.cur_char();
             o.appendChild(s);
             a.push(s);
         }
         o.appendChild(document.createTextNode('|'));
         o.style.display = 'none';
         this._a.push(a);
-        this._df.appendChild(o);
-        if (++ this._c_nln > this._row) {
-            this._a.shift();
-            var t = this._df.childNodes[0];
-            this._df.removeChild(t);
-        }
-        o.style.display = 'block';
+        return o;
+    },
+    cur_char: function ()
+    {
+        var r = document.createElement('SPAN');
+        r.appendChild(document.createTextNode(' '));
+        return r;
+    },
+    cur_set_lf: function (r, b)
+    {
+        this.log("cur_set_lf: " + r + " -> " + b);
+        if (r >= 0 && r < this._row)
+            this._a[r].lf = b ? 1 : 0;
+    },
+    cur_get_lf: function (r)
+    {
+        this.log("cur_get_lf: " + r + " -> " + (this._a[r] && this._a[r].lf));
+        return this._a[r] && this._a[r].lf;
     },
     cur_save: function ()
     {
@@ -195,10 +238,30 @@ TERM.fn = TERM.prototype = {
     },
     cur_restore: function ()
     {
-        this.cur_hide();
-        this._c_row = this._c_svp[0];
-        this._c_col = this._c_svp[1];
-        this.cur_show();
+        if (this._c_svp) {
+            this.cur_hide();
+            this._c_row = this._c_svp[0];
+            this._c_col = this._c_svp[1];
+            this.cur_show();
+        }
+    },
+    cur_ins: function (i)
+    {
+        var c = this._c_col;
+        var a = this._a[this._c_row];
+        var r = a.root;
+        while (i-- > 0 && c < this._col) {
+            
+        }
+    },
+    cur_del: function (i)
+    {
+        var c = this._c_col;
+        var a = this._a[this._c_row];
+        var r = a.root;
+        while (i-- > 0 && c < this._col) {
+            
+        }
     },
     _n:      'NeoTerm', // display div id
     _a:      [],        // display data
@@ -220,16 +283,29 @@ TERM.fn = TERM.prototype = {
         this._a[r][c].style.cssText = this.get_text();
         this._a[r][c].innerHTML = (this.__sct[i] || i);
     },
-    set_char_next: function (i, r, c)
+    set_char_next: function (i)
     {
-        if (c === undefined) {
-            c = this._c_col;
-            if (r === undefined)
-                r = this._c_row;
+        switch (i) {
+        case ' ':
+            this.set_char(' ', this._c_row, this._c_col);
+            this._a[this._c_row][this._c_col].tab = 9;
+            this._c_col++;
+            this.cur_tidy();
+            break;
+        case '\t':
+            for (var n = 8 - (this._c_col % 8); n > 0; --n) {
+                this.set_chr(' ', this._c_row, this._c_col);
+                this._a[this._c_row][this._c_col].tab = n;
+                this._c_col++;
+                this.cur_tidy();
+            }
+            break;
+        default:
+            this.set_char(i, this._c_row, this._c_col);
+            this._c_col++;
+            this.cur_tidy();
+            break;
         }
-        this.set_char(i, r, c);
-        this._c_col ++;
-        this.cur_tidy();
     },
     display: function (log)
     {
@@ -265,8 +341,11 @@ TERM.fn = TERM.prototype = {
         this._d.innerHTML = s;
         this.set_title();
         this._df = this.$('df');
-        for (var i = 0; i < this._row; ++i)
-            this.cur_line();
+        for (var i = 0; i < this._row; ++i) {
+            var n = this.cur_line()
+            this._df.appendChild(n);
+            n.style.display = 'block';
+        }
         this._d.onkeydown = function ()
         {
             self.key_down(window.event);
@@ -310,7 +389,7 @@ TERM.fn = TERM.prototype = {
     _shift_t: {
         48: [48, 41], 49: [49, 33], 50: [50, 64], 51: [51, 35], 52: [52, 36],
         53: [53, 37], 54: [54, 94], 55: [55, 38], 56: [56, 42], 57: [57, 40],
-        37: [ 2,  2], 38: [16, 16], 39: [ 6,  6], 40: [14, 14], // l u r d
+        37: [ 2,  2], 38: [16, -2], 39: [ 6,  6], 40: [14, -3], // l u r d
         192: [96, 126],     // ` ~
         189: [45,  95],     // - _
         187: [61,  43],     // = +
@@ -343,6 +422,10 @@ TERM.fn = TERM.prototype = {
             }
             if (i >= 0)
                 this.send(String.fromCharCode(i));
+            else if (i == -2)
+                this.set_log(false);
+            else if (i == -3)
+                this.set_log(true);
         }
         try { e.returnValue = false; } catch (x) {}
         try { e.keyCode = 0; } catch (x) {}
@@ -434,7 +517,6 @@ TERM.fn = TERM.prototype = {
         for (var _x_ = 0; _x_ < s.length; ++_x_) {
             c = s.charAt(_x_);
             i = c.charCodeAt(0);
-//            this.log('c: ' + c + ';\ti: ' + i + ';\tno: ' + this._s_no);
             if (i < 32 && this._s_no < 5) {
                 switch (c) {
                 case '\005': break; // type query
@@ -461,10 +543,16 @@ TERM.fn = TERM.prototype = {
                     this._c_col += this._col;
                     this.cur_tidy();
                     break;
+                    if (!this._c_col && this.cur_get_lf(this._c_row - 1) === 0)
+                        this.cur_set_lf(this._c_row - 1, 1);
+                    else {
+                        this.cur_set_lf(this._c_row, 1);
+                        this._c_col += this._col;
+                        this.cur_tidy();
+                    }
+                    break;
                 case '\t':          // TAB
-                    do {
-                        this.set_char_next(' ');
-                    } while (this._c_col % 8);
+                    this.set_char_next('\t');
                     break;
                 }
             } else {
@@ -526,7 +614,7 @@ TERM.fn = TERM.prototype = {
                         case 'F':
                             this._c_col = 0;
                         case 'A':   // up n lines
-                            this._c_row -= parseInt(s);
+                            this._c_row -= parseInt(_s) || 1;
                             if (this._c_row < 0)
                                 this._c_row = 0;
                             break;
@@ -534,18 +622,18 @@ TERM.fn = TERM.prototype = {
                             this._c_col = 0;
                         case 'e':
                         case 'B':   // down n lines
-                            this._c_row += parseInt(s);
+                            this._c_row += parseInt(_s) || 1;
                             if (this._c_row >= this._row)
                                 this._c_row = this._row - 1;
                             break;
                         case 'a':
                         case 'C':   // move right n cols
-                            this._c_col += parseInt(s);
+                            this._c_col += parseInt(_s) || 1;
                             if (this._c_col >= this._col)
                                 this._c_col = this._col - 1;
                             break;
                         case 'D':   // move left n cols
-                            this._c_col -= parseInt(s);
+                            this._c_col -= parseInt(_s) || 1;
                             if (this._c_col < 0)
                                 this._c_col = 0;
                             break;
@@ -609,16 +697,24 @@ TERM.fn = TERM.prototype = {
                             }
                             break;
                         case 'L':   // insert lines
+                            this.cur_scroll(-(parseInt(_s) || 1), this._c_row)
+                            break;
                         case 'M':   // delete lines
+                            this.cur_scroll(parseInt(_s) || 1, this._c_row)
+                            break;
                         case '@':   // insert chars
+                            this.cur_ins(parseInt(_s) || 1);
+                            break;
                         case 'P':   // delete chars
+                            this.cur_del(parseInt(_s) || 1);
+                            break;
                         case 'c':   // terminal type query
                         case 'n':   // cursor pos query
                             break;
                         case 'm':
                             _s = _s.split(';')
                             for (var a = 0; a < _s.length; ++a) {
-                                i = parseInt(_s[a] || 0);
+                                i = parseInt(_s[a]) || 0;
                                 switch (i) {
                                 case 0:
                                     this.disp_init();

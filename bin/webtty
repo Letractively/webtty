@@ -8,7 +8,6 @@
 ## WebTTY start script
 ##=============================================================================
 set -e
-trap "" 1
 
 NAME="WebTTY"
 PROG=lib/comet_httpd.py
@@ -58,9 +57,7 @@ start()
         [ -d ${LOG_PATH} ] || mkdir -p ${LOG_PATH}
         [ -d ${PID_PATH} ] || mkdir -p ${PID_PATH}
         action "Start  ${NAME}... "
-        {
-            exec python "${ROOT}/${PROG}"
-        } >>${LOG_FILE} 2>>${LOG_ERRF} &
+        nohup python "${ROOT}/${PROG}" >>${LOG_FILE} 2>>${LOG_ERRF} &
         echo "$!" >${PID_FILE}
         sleep 0.2
         state && ok || err
